@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { GameRoom, GameSlug, TicTacToeState, RPSState, UserProfile } from '../src/types/index.js';
-import { roomsStore, getUserById, recordMatchCompletion, GAMES_CATALOG } from './store.js';
+import { roomsStore, getUserById, recordMatchCompletion, GAMES_CATALOG, markUserOnline, markUserOffline } from './store.js';
 import { createInitialTicTacToeState, processTicTacToeMove } from './games/ticTacToe.js';
 import { createInitialRPSState, processRPSChoice, advanceRPSRound } from './games/rockPaperScissors.js';
 
@@ -10,6 +10,7 @@ const activeGameStates = new Map<string, {
   state: TicTacToeState | RPSState;
   rematchRequests: Set<string>;
   isBotMatch?: boolean;
+  botDifficulty?: 'easy' | 'hard';
   pendingTimeouts?: NodeJS.Timeout[];
 }>();
 
@@ -32,47 +33,99 @@ function addSessionTimeout(session: any, callback: () => void, ms: number): Node
   return t;
 }
 
-function computeSmartTicTacToeMove(board: (string | null)[], botSymbol: 'X' | 'O', userSymbol: 'X' | 'O'): number {
+function checkBoardWinner(board: (string | null)[]): 'X' | 'O' | null {
+  const winLines = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6]
+  ];
+  for (const [a, b, c] of winLines) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+      return board[a] as 'X' | 'O';
+    }
+  }
+  return null;
+}
+
+function minimax(
+  board: (string | null)[],
+  depth: number,
+  isMaximizing: boolean,
+  botSymbol: 'X' | 'O',
+  userSymbol: 'X' | 'O'
+): { score: number; move?: number } {
+  const winner = checkBoardWinner(board);
+  if (winner === botSymbol) return { score: 10 - depth };
+  if (winner === userSymbol) return { score: depth - 10 };
+  const emptyIndices = board.map((c, i) => (c === null ? i : null)).filter(v => v !== null) as number[];
+  if (emptyIndices.length === 0) return { score: 0 };
+
+  if (isMaximizing) {
+    let bestScore = -Infinity;
+    let bestMove = emptyIndices[0];
+    for (const idx of emptyIndices) {
+      board[idx] = botSymbol;
+      const result = minimax(board, depth + 1, false, botSymbol, userSymbol);
+      board[idx] = null;
+      if (result.score > bestScore) {
+        bestScore = result.score;
+        bestMove = idx;
+      }
+    }
+    return { score: bestScore, move: bestMove };
+  } else {
+    let bestScore = Infinity;
+    let bestMove = emptyIndices[0];
+    for (const idx of emptyIndices) {
+      board[idx] = userSymbol;
+      const result = minimax(board, depth + 1, true, botSymbol, userSymbol);
+      board[idx] = null;
+      if (result.score < bestScore) {
+        bestScore = result.score;
+        bestMove = idx;
+      }
+    }
+    return { score: bestScore, move: bestMove };
+  }
+}
+
+function computeSmartTicTacToeMove(
+  board: (string | null)[],
+  botSymbol: 'X' | 'O',
+  userSymbol: 'X' | 'O',
+  difficulty: 'easy' | 'hard' = 'easy'
+): number {
   const winLines = [
     [0, 1, 2], [3, 4, 5], [6, 7, 8],
     [0, 3, 6], [1, 4, 7], [2, 5, 8],
     [0, 4, 8], [2, 4, 6]
   ];
 
-  // 1. Can Bot win in 1 move?
-  for (const line of winLines) {
-    const [a, b, c] = line;
-    const cells = [board[a], board[b], board[c]];
-    if (cells.filter(c => c === botSymbol).length === 2 && cells.filter(c => c === null).length === 1) {
-      return line[cells.indexOf(null)];
+  const emptyIndices = board.map((cell, idx) => (cell === null ? idx : null)).filter(val => val !== null) as number[];
+  if (emptyIndices.length === 0) return 0;
+
+  if (difficulty === 'easy') {
+    // EASY MODE: Wins are easier for player.
+    // 15% chance to complete a win if bot has 2.
+    // 85% chance to pick a random open spot without blocking player.
+    if (Math.random() < 0.15) {
+      for (const line of winLines) {
+        const [a, b, c] = line;
+        const cells = [board[a], board[b], board[c]];
+        if (cells.filter(c => c === botSymbol).length === 2 && cells.filter(c => c === null).length === 1) {
+          return line[cells.indexOf(null)];
+        }
+      }
     }
-  }
-
-  // 2. Can User win in 1 move? Block them!
-  for (const line of winLines) {
-    const [a, b, c] = line;
-    const cells = [board[a], board[b], board[c]];
-    if (cells.filter(c => c === userSymbol).length === 2 && cells.filter(c => c === null).length === 1) {
-      return line[cells.indexOf(null)];
+    return emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+  } else {
+    // HARD MODE: Perfect Minimax strategy
+    const bestMoveObj = minimax([...board], 0, true, botSymbol, userSymbol);
+    if (bestMoveObj.move !== undefined) {
+      return bestMoveObj.move;
     }
+    return emptyIndices[0];
   }
-
-  // 3. Take Center if free
-  if (board[4] === null) return 4;
-
-  // 4. Take corners if free
-  const corners = [0, 2, 6, 8].filter(idx => board[idx] === null);
-  if (corners.length > 0) {
-    return corners[Math.floor(Math.random() * corners.length)];
-  }
-
-  // 5. Take any remaining free spot
-  const freeIndices = board.map((cell, idx) => cell === null ? idx : null).filter(val => val !== null) as number[];
-  if (freeIndices.length > 0) {
-    return freeIndices[Math.floor(Math.random() * freeIndices.length)];
-  }
-
-  return 0;
 }
 
 function handleBotTicTacToeTurn(io: SocketIOServer, code: string) {
@@ -89,7 +142,8 @@ function handleBotTicTacToeTurn(io: SocketIOServer, code: string) {
   const botSymbol = tttState.players.X.id === botUser.id ? 'X' : 'O';
   const userSymbol = botSymbol === 'X' ? 'O' : 'X';
 
-  const chosenCell = computeSmartTicTacToeMove(tttState.board, botSymbol, userSymbol);
+  const difficulty = session.botDifficulty || (tttState as any).botDifficulty || 'easy';
+  const chosenCell = computeSmartTicTacToeMove(tttState.board, botSymbol, userSymbol, difficulty);
   const result = processTicTacToeMove(tttState, botUser.id, chosenCell);
 
   if (result.valid && result.newState) {
@@ -187,10 +241,24 @@ function generateRoomCode(): string {
   return code;
 }
 
+const userSocketsMap = new Map<string, Set<string>>();
+
 export function setupSocketIO(io: SocketIOServer) {
   io.on('connection', (socket: Socket) => {
     let currentRoomCode: string | null = null;
     let currentUser: UserProfile | null = null;
+
+    const resolveUser = (): UserProfile | null => {
+      if (currentUser) return currentUser;
+      if (socket.data?.userId) {
+        const u = getUserById(socket.data.userId);
+        if (u) {
+          currentUser = u;
+          return u;
+        }
+      }
+      return null;
+    };
 
     // Authenticate socket user
     socket.on('auth:init', (data: { userId: string }) => {
@@ -203,6 +271,12 @@ export function setupSocketIO(io: SocketIOServer) {
         socket.join(`user:${u.username.toLowerCase()}`);
         socket.emit('auth:success', { user: u });
 
+        if (!userSocketsMap.has(u.id)) {
+          userSocketsMap.set(u.id, new Set());
+        }
+        userSocketsMap.get(u.id)!.add(socket.id);
+        markUserOnline(u.id);
+
         // Clear any pending disconnect timeout if reconnecting
         if (disconnectTimeouts.has(u.id)) {
           clearTimeout(disconnectTimeouts.get(u.id));
@@ -213,7 +287,8 @@ export function setupSocketIO(io: SocketIOServer) {
 
     // 1. Create Room
     socket.on('room:create', (data: { gameSlug: GameSlug; isPrivate: boolean }) => {
-      if (!currentUser) {
+      const user = resolveUser();
+      if (!user) {
         socket.emit('error', { message: 'Authentication required' });
         return;
       }
@@ -235,10 +310,10 @@ export function setupSocketIO(io: SocketIOServer) {
         gameId: game.id,
         gameSlug: game.slug,
         gameName: game.name,
-        hostId: currentUser.id,
-        hostUsername: currentUser.username,
-        hostAvatar: currentUser.avatar,
-        hostRating: currentUser.rating,
+        hostId: user.id,
+        hostUsername: user.username,
+        hostAvatar: user.avatar,
+        hostRating: user.rating,
         status: 'waiting',
         isPrivate: data.isPrivate ?? false,
         createdAt: Date.now(),
@@ -254,8 +329,9 @@ export function setupSocketIO(io: SocketIOServer) {
     });
 
     // 1b. Create AI Bot Room
-    socket.on('room:create_bot', (data: { gameSlug: GameSlug }) => {
-      if (!currentUser) {
+    socket.on('room:create_bot', (data: { gameSlug: GameSlug; difficulty?: 'easy' | 'hard' }) => {
+      const user = resolveUser();
+      if (!user) {
         socket.emit('error', { message: 'Authentication required' });
         return;
       }
@@ -305,6 +381,7 @@ export function setupSocketIO(io: SocketIOServer) {
 
       const host = currentUser;
       const guest = botUser;
+      const difficulty = data?.difficulty || 'easy';
 
       let initialState: TicTacToeState | RPSState;
       if (room.gameSlug === 'tic-tac-toe') {
@@ -312,6 +389,7 @@ export function setupSocketIO(io: SocketIOServer) {
           { id: host.id, username: host.username, avatar: host.avatar, rating: host.rating },
           { id: guest.id, username: guest.username, avatar: guest.avatar, rating: guest.rating }
         );
+        (initialState as TicTacToeState).botDifficulty = difficulty;
       } else {
         initialState = createInitialRPSState(
           { id: host.id, username: host.username, avatar: host.avatar, rating: host.rating },
@@ -323,7 +401,8 @@ export function setupSocketIO(io: SocketIOServer) {
         gameSlug: room.gameSlug,
         state: initialState,
         rematchRequests: new Set(),
-        isBotMatch: true
+        isBotMatch: true,
+        botDifficulty: difficulty
       });
 
       socket.emit('room:created', { room });
@@ -340,9 +419,33 @@ export function setupSocketIO(io: SocketIOServer) {
       }
     });
 
+    // 1c. Set AI Bot Difficulty
+    socket.on('game:set_bot_difficulty', (data: { roomCode: string; difficulty: 'easy' | 'hard' }) => {
+      if (!data?.roomCode || !data?.difficulty) return;
+      const code = data.roomCode.toUpperCase();
+      const session = activeGameStates.get(code);
+      if (session && session.isBotMatch) {
+        session.botDifficulty = data.difficulty;
+        if (session.state) {
+          (session.state as TicTacToeState).botDifficulty = data.difficulty;
+        }
+        io.to(code).emit('game:updated', { gameState: session.state });
+
+        if (session.gameSlug === 'tic-tac-toe') {
+          const ttt = session.state as TicTacToeState;
+          const botUser = getUserById('usr-bot') || { id: 'usr-bot' };
+          if (ttt.status === 'active' && ttt.players[ttt.currentTurn]?.id === botUser.id) {
+            clearSessionTimeouts(session);
+            addSessionTimeout(session, () => handleBotTicTacToeTurn(io, code), 300);
+          }
+        }
+      }
+    });
+
     // 2. Join Room by Code
     socket.on('room:join', (data: { roomCode: string }) => {
-      if (!currentUser) {
+      const user = resolveUser();
+      if (!user) {
         socket.emit('error', { message: 'Authentication required' });
         return;
       }
@@ -355,13 +458,13 @@ export function setupSocketIO(io: SocketIOServer) {
         return;
       }
 
-      if (room.status === 'in_game' && room.hostId !== currentUser.id && room.guestId !== currentUser.id) {
+      if (room.status === 'in_game' && room.hostId !== user.id && room.guestId !== user.id) {
         socket.emit('error', { message: 'Room is full and match is already in progress.' });
         return;
       }
 
       // If rejoining host or guest
-      if (room.hostId === currentUser.id) {
+      if (room.hostId === user.id) {
         currentRoomCode = code;
         socket.join(code);
         socket.emit('room:joined', { room });
@@ -373,7 +476,7 @@ export function setupSocketIO(io: SocketIOServer) {
         return;
       }
 
-      if (room.guestId === currentUser.id) {
+      if (room.guestId === user.id) {
         currentRoomCode = code;
         socket.join(code);
         socket.emit('room:joined', { room });
@@ -385,10 +488,10 @@ export function setupSocketIO(io: SocketIOServer) {
       }
 
       // Joining as new guest
-      room.guestId = currentUser.id;
-      room.guestUsername = currentUser.username;
-      room.guestAvatar = currentUser.avatar;
-      room.guestRating = currentUser.rating;
+      room.guestId = user.id;
+      room.guestUsername = user.username;
+      room.guestAvatar = user.avatar;
+      room.guestRating = user.rating;
       room.currentPlayers = 2;
       room.status = 'in_game';
 
@@ -397,7 +500,7 @@ export function setupSocketIO(io: SocketIOServer) {
 
       // Initialize game state on server
       const host = getUserById(room.hostId)!;
-      const guest = currentUser;
+      const guest = user;
 
       let initialState: TicTacToeState | RPSState;
       if (room.gameSlug === 'tic-tac-toe') {
@@ -426,7 +529,8 @@ export function setupSocketIO(io: SocketIOServer) {
 
     // 3. Matchmaking Queue
     socket.on('matchmaking:find', (data: { gameSlug: GameSlug }) => {
-      if (!currentUser) {
+      const user = resolveUser();
+      if (!user) {
         socket.emit('error', { message: 'Authentication required' });
         return;
       }
@@ -438,14 +542,14 @@ export function setupSocketIO(io: SocketIOServer) {
 
       const queue = matchmakingQueues.get(slug)!;
       // Filter out existing socket/user
-      const existingIdx = queue.findIndex(q => q.user.id === currentUser!.id);
+      const existingIdx = queue.findIndex(q => q.user.id === user.id);
       if (existingIdx !== -1) queue.splice(existingIdx, 1);
 
       if (queue.length > 0) {
         // Match found!
         const opponent = queue.shift()!;
         const host = opponent.user;
-        const guest = currentUser;
+        const guest = user;
 
         const code = generateRoomCode();
         const game = GAMES_CATALOG.find(g => g.slug === slug)!;
@@ -500,15 +604,16 @@ export function setupSocketIO(io: SocketIOServer) {
         io.to(code).emit('match:started', { room, gameState: initialState });
       } else {
         // Add to queue
-        queue.push({ socketId: socket.id, user: currentUser });
+        queue.push({ socketId: socket.id, user });
         socket.emit('matchmaking:searching', { gameSlug: slug });
       }
     });
 
     socket.on('matchmaking:cancel', () => {
-      if (!currentUser) return;
+      const user = resolveUser();
+      if (!user) return;
       for (const queue of matchmakingQueues.values()) {
-        const idx = queue.findIndex(q => q.user.id === currentUser!.id);
+        const idx = queue.findIndex(q => q.user.id === user.id);
         if (idx !== -1) queue.splice(idx, 1);
       }
       socket.emit('matchmaking:cancelled');
@@ -516,7 +621,8 @@ export function setupSocketIO(io: SocketIOServer) {
 
     // 4. Server-Authoritative Game Moves
     socket.on('game:move', (data: { roomCode: string; action: any }) => {
-      if (!currentUser) return;
+      const user = resolveUser();
+      if (!user) return;
       const code = data.roomCode.toUpperCase();
       const session = activeGameStates.get(code);
 
@@ -531,7 +637,7 @@ export function setupSocketIO(io: SocketIOServer) {
         const tttState = state as TicTacToeState;
         const cellIndex = Number(data.action.cellIndex);
 
-        const result = processTicTacToeMove(tttState, currentUser.id, cellIndex);
+        const result = processTicTacToeMove(tttState, user.id, cellIndex);
         if (!result.valid) {
           socket.emit('error', { message: result.error });
           return;
@@ -570,7 +676,7 @@ export function setupSocketIO(io: SocketIOServer) {
         const rpsState = state as RPSState;
         const choice = data.action.choice;
 
-        const result = processRPSChoice(rpsState, currentUser.id, choice);
+        const result = processRPSChoice(rpsState, user.id, choice);
         if (!result.valid) {
           socket.emit('error', { message: result.error });
           return;
@@ -585,7 +691,7 @@ export function setupSocketIO(io: SocketIOServer) {
           } else {
             // Send update showing that player locked choice without revealing opponent's choice
             socket.emit('game:updated', { gameState: session.state });
-            socket.to(code).emit('game:updated', { gameState: sanitizeStateForPlayer(session.state, currentUser.id) });
+            socket.to(code).emit('game:updated', { gameState: sanitizeStateForPlayer(session.state, user.id) });
           }
         } else {
           // Both choices locked! Broadcast reveal state to room
@@ -640,9 +746,19 @@ export function setupSocketIO(io: SocketIOServer) {
 
       if (!session || !room) return;
 
-      const user = currentUser || (socket.data?.userId ? getUserById(socket.data.userId) : null);
-      const userId = user?.id || room.hostId;
-      const username = user?.username || room.hostUsername;
+      const user = resolveUser();
+      let userId = user?.id;
+      let username = user?.username;
+
+      if (!userId) {
+        if (room.guestId && room.hostId !== socket.data?.userId) {
+          userId = room.guestId || 'usr-bot';
+          username = room.guestUsername || 'Guest';
+        } else {
+          userId = room.hostId;
+          username = room.hostUsername;
+        }
+      }
 
       session.rematchRequests.add(userId);
       if (session.isBotMatch) {
@@ -747,15 +863,15 @@ export function setupSocketIO(io: SocketIOServer) {
         addSessionTimeout(session, () => handleBotTicTacToeTurn(io, code), 600);
       }
     });
-
     // 6. Chat / Emote
     socket.on('game:emote', (data: { roomCode: string; emote: string }) => {
-      if (!currentUser || !data?.roomCode) return;
+      const user = resolveUser();
+      if (!user || !data?.roomCode) return;
       const code = data.roomCode.toUpperCase();
       
       // Broadcast reaction to both players in room
       io.to(code).emit('game:emote_received', {
-        username: currentUser.username,
+        username: user.username,
         emote: data.emote
       });
 
@@ -775,15 +891,16 @@ export function setupSocketIO(io: SocketIOServer) {
 
     // 7. Room Leave handling
     socket.on('room:leave', () => {
-      if (!currentUser || !currentRoomCode) return;
+      const user = resolveUser();
+      if (!user || !currentRoomCode) return;
       const code = currentRoomCode;
       const room = roomsStore.get(code);
       const session = activeGameStates.get(code);
 
       if (room && session && room.status === 'in_game') {
         room.status = 'finished';
-        const remainingWinnerId = room.hostId === currentUser.id ? room.guestId : room.hostId;
-        const leaverId = currentUser.id;
+        const remainingWinnerId = room.hostId === user.id ? room.guestId : room.hostId;
+        const leaverId = user.id;
 
         if (remainingWinnerId) {
           const matchResult = recordMatchCompletion(
@@ -796,7 +913,7 @@ export function setupSocketIO(io: SocketIOServer) {
 
           io.to(code).emit('opponent:forfeit', {
             winnerId: remainingWinnerId,
-            message: `${currentUser.username} left the match. Automatic victory granted!`
+            message: `${user.username} left the match. Automatic victory granted!`
           });
 
           io.to(code).emit('game:finished', {
@@ -808,7 +925,7 @@ export function setupSocketIO(io: SocketIOServer) {
             ratingChanges: matchResult ? matchResult : {},
             matchRecord: matchResult ? matchResult.matchRecord : null,
             forfeit: true,
-            forfeitMessage: `${currentUser.username} left the match. Automatic victory granted!`
+            forfeitMessage: `${user.username} left the match. Automatic victory granted!`
           });
         }
       }
@@ -819,9 +936,10 @@ export function setupSocketIO(io: SocketIOServer) {
 
     // 7b. Challenge 1v1 event
     socket.on('challenge:send', (data: { targetUserId?: string; targetUsername?: string; roomCode: string; gameSlug: GameSlug; gameName: string }) => {
-      if (!currentUser) return;
+      const user = resolveUser();
+      if (!user) return;
       const payload = {
-        challenger: currentUser,
+        challenger: user,
         roomCode: data.roomCode,
         gameSlug: data.gameSlug,
         gameName: data.gameName
@@ -836,32 +954,46 @@ export function setupSocketIO(io: SocketIOServer) {
     });
 
     socket.on('challenge:respond', (data: { roomCode: string; action: 'accept' | 'decline'; challengerId: string }) => {
-      if (!currentUser) return;
+      const user = resolveUser();
+      if (!user) return;
       if (data.action === 'decline') {
         io.to(`user:${data.challengerId}`).emit('challenge:declined', {
-          responderName: currentUser.username
+          responderName: user.username
         });
       }
     });
 
     // 7c. Friend Request Real-Time Notification
     socket.on('friend:request_send', (data: { targetUsername: string }) => {
-      if (!currentUser) return;
+      const user = resolveUser();
+      if (!user) return;
       io.to(`user:${data.targetUsername.toLowerCase()}`).emit('friend:request_received', {
-        sender: currentUser
+        sender: user
       });
     });
 
     // 8. Disconnect handling
     socket.on('disconnect', () => {
-      if (currentUser && currentRoomCode) {
+      const user = resolveUser();
+      if (user) {
+        const userSet = userSocketsMap.get(user.id);
+        if (userSet) {
+          userSet.delete(socket.id);
+          if (userSet.size === 0) {
+            userSocketsMap.delete(user.id);
+            markUserOnline(user.id);
+          }
+        }
+      }
+
+      if (user && currentRoomCode) {
         const code = currentRoomCode;
         socket.to(code).emit('opponent:disconnected', {
-          username: currentUser.username,
+          username: user.username,
           gracePeriodSeconds: 30
         });
 
-        const userId = currentUser.id;
+        const userId = user.id;
         const timeout = setTimeout(() => {
           // Grace period elapsed -> forfeit match to opponent
           const session = activeGameStates.get(code);
@@ -883,7 +1015,7 @@ export function setupSocketIO(io: SocketIOServer) {
 
               io.to(code).emit('opponent:forfeit', {
                 winnerId: remainingWinnerId,
-                message: `${currentUser?.username} disconnected and forfeited the match.`
+                message: `${user?.username} disconnected and forfeited the match.`
               });
 
               io.to(code).emit('game:finished', {
@@ -895,7 +1027,7 @@ export function setupSocketIO(io: SocketIOServer) {
                 ratingChanges: matchResult ? matchResult : {},
                 matchRecord: matchResult ? matchResult.matchRecord : null,
                 forfeit: true,
-                forfeitMessage: `${currentUser?.username} disconnected. Automatic victory granted!`
+                forfeitMessage: `${user?.username} disconnected. Automatic victory granted!`
               });
             }
           }

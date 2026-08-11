@@ -19,7 +19,8 @@ interface SocketContextType {
   declinedNotification: string | null;
   latestEmote: { username: string; emote: string; timestamp: number } | null;
   createRoom: (gameSlug: GameSlug, isPrivate?: boolean) => void;
-  createBotMatch: (gameSlug: GameSlug) => void;
+  createBotMatch: (gameSlug: GameSlug, difficulty?: 'easy' | 'hard') => void;
+  setBotDifficulty: (difficulty: 'easy' | 'hard') => void;
   joinRoom: (roomCode: string) => void;
   leaveRoom: () => void;
   findMatch: (gameSlug: GameSlug) => void;
@@ -57,6 +58,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [incomingFriendRequest, setIncomingFriendRequest] = useState<{ sender: any } | null>(null);
   const [declinedNotification, setDeclinedNotification] = useState<string | null>(null);
   const [latestEmote, setLatestEmote] = useState<{ username: string; emote: string; timestamp: number } | null>(null);
+
+  useEffect(() => {
+    if (socket && connectionStatus === 'connected' && user?.id) {
+      socket.emit('auth:init', { userId: user.id });
+    }
+  }, [socket, connectionStatus, user?.id]);
 
   useEffect(() => {
     const s = io(window.location.origin, {
@@ -181,8 +188,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (socket) socket.emit('room:create', { gameSlug, isPrivate });
   };
 
-  const createBotMatch = (gameSlug: GameSlug) => {
-    if (socket) socket.emit('room:create_bot', { gameSlug });
+  const createBotMatch = (gameSlug: GameSlug, difficulty: 'easy' | 'hard' = 'easy') => {
+    if (socket) socket.emit('room:create_bot', { gameSlug, difficulty });
+  };
+
+  const setBotDifficulty = (difficulty: 'easy' | 'hard') => {
+    if (socket && activeRoom) {
+      socket.emit('game:set_bot_difficulty', { roomCode: activeRoom.roomCode, difficulty });
+    }
   };
 
   const joinRoom = (roomCode: string) => {
@@ -310,6 +323,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         latestEmote,
         createRoom,
         createBotMatch,
+        setBotDifficulty,
         joinRoom,
         leaveRoom,
         findMatch,

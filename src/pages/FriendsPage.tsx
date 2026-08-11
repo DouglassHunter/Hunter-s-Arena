@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { useSound } from '../context/SoundContext.js';
 import { useSocket } from '../context/SocketContext.js';
 import { FriendItem } from '../types/index.js';
-import { Users, UserPlus, Gamepad2, Flame, Check, X, Search, Swords, UserX, Loader2, Sparkles } from 'lucide-react';
+import { Users, UserPlus, Gamepad2, Flame, Check, X, Search, Swords, UserX, Loader2, Sparkles, Clock } from 'lucide-react';
 
 interface SearchedUser {
   id: string;
@@ -38,6 +38,8 @@ export const FriendsPage: React.FC = () => {
 
   useEffect(() => {
     fetchFriends();
+    const interval = setInterval(fetchFriends, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   // Live database user search debounced
@@ -162,7 +164,8 @@ export const FriendsPage: React.FC = () => {
   };
 
   const confirmedFriends = friends.filter(f => !f.isPending);
-  const pendingRequests = friends.filter(f => f.isPending);
+  const incomingRequests = friends.filter(f => f.isPending && f.isIncoming);
+  const outgoingRequests = friends.filter(f => f.isPending && !f.isIncoming);
 
   return (
     <div id="friends-page" className="min-h-screen bg-slate-950 text-white py-8 px-4 sm:px-6 lg:px-8">
@@ -294,8 +297,8 @@ export const FriendsPage: React.FC = () => {
             }`}
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>REQUESTS ({pendingRequests.length})</span>
-            {pendingRequests.length > 0 && (
+            <span>REQUESTS ({incomingRequests.length + outgoingRequests.length})</span>
+            {incomingRequests.length > 0 && (
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
             )}
           </button>
@@ -326,39 +329,56 @@ export const FriendsPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono">
-                {confirmedFriends.map(f => (
-                  <div
-                    key={f.id}
-                    className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between gap-4 shadow-lg hover:border-slate-700 transition-all"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <img
-                            src={f.avatar}
-                            alt={f.username}
-                            className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 object-cover"
-                          />
-                          <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-slate-900"></span>
+                {confirmedFriends.map(f => {
+                  const isOnline = f.status === 'online' || f.status === 'in_game';
+                  return (
+                    <div
+                      key={f.id}
+                      className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between gap-4 shadow-lg hover:border-slate-700 transition-all"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <img
+                              src={f.avatar}
+                              alt={f.username}
+                              className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 object-cover"
+                            />
+                            <span
+                              className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-900 ${
+                                isOnline ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' : 'bg-rose-500 shadow-sm shadow-rose-500/50'
+                              }`}
+                              title={isOnline ? 'Online' : 'Offline'}
+                            ></span>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-bold text-white">{f.username}</h4>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                                isOnline
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`}></span>
+                                {isOnline ? 'ONLINE' : 'OFFLINE'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-amber-400 font-medium flex items-center gap-1 mt-0.5">
+                              <Flame className="w-3 h-3 text-amber-500" />
+                              {f.rating} ELO
+                            </p>
+                          </div>
                         </div>
 
-                        <div>
-                          <h4 className="text-sm font-bold text-white">{f.username}</h4>
-                          <p className="text-xs text-amber-400 font-medium flex items-center gap-1">
-                            <Flame className="w-3 h-3 text-amber-500" />
-                            {f.rating} ELO
-                          </p>
-                        </div>
+                        <button
+                          onClick={() => handleRejectRequest(f.id)}
+                          title="Remove Friend"
+                          className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                        >
+                          <UserX className="w-4 h-4" />
+                        </button>
                       </div>
-
-                      <button
-                        onClick={() => handleRejectRequest(f.id)}
-                        title="Remove Friend"
-                        className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                      >
-                        <UserX className="w-4 h-4" />
-                      </button>
-                    </div>
 
                     {/* Head-to-Head Stats Banner */}
                     <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between text-xs">
@@ -387,7 +407,8 @@ export const FriendsPage: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
             )}
           </div>
@@ -395,45 +416,81 @@ export const FriendsPage: React.FC = () => {
 
         {/* Tab 2: Pending Requests */}
         {activeTab === 'requests' && (
-          <div className="space-y-3 font-mono">
-            {pendingRequests.length === 0 ? (
-              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-8 text-center text-xs text-slate-500">
-                No pending friend requests.
-              </div>
-            ) : (
-              pendingRequests.map(r => (
-                <div
-                  key={r.id}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <img src={r.avatar} alt={r.username} className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 object-cover" />
-                    <div>
-                      <p className="text-sm font-bold text-white">{r.username}</p>
-                      <p className="text-xs text-amber-400 flex items-center gap-1">
-                        <Flame className="w-3 h-3" /> {r.rating} ELO
-                      </p>
+          <div className="space-y-6 font-mono">
+            {/* Incoming Friend Requests */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                <UserPlus className="w-4 h-4" /> INCOMING REQUESTS ({incomingRequests.length})
+              </h3>
+              {incomingRequests.length === 0 ? (
+                <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-500">
+                  No incoming friend requests.
+                </div>
+              ) : (
+                incomingRequests.map(r => (
+                  <div
+                    key={r.id}
+                    className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img src={r.avatar} alt={r.username} className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 object-cover" />
+                      <div>
+                        <p className="text-sm font-bold text-white">{r.username}</p>
+                        <p className="text-xs text-amber-400 flex items-center gap-1">
+                          <Flame className="w-3 h-3" /> {r.rating} ELO
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleAcceptFriendRequest(r.id)}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>ACCEPT</span>
+                      </button>
+                      <button
+                        onClick={() => handleRejectRequest(r.id)}
+                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1"
+                      >
+                        <X className="w-4 h-4" />
+                        <span>DENY</span>
+                      </button>
                     </div>
                   </div>
+                ))
+              )}
+            </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleAcceptFriendRequest(r.id)}
-                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md"
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>ACCEPT</span>
-                    </button>
-                    <button
-                      onClick={() => handleRejectRequest(r.id)}
-                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1"
-                    >
-                      <X className="w-4 h-4" />
-                      <span>REJECT</span>
-                    </button>
+            {/* Outgoing Friend Requests */}
+            {outgoingRequests.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-4 h-4" /> SENT REQUESTS ({outgoingRequests.length})
+                </h3>
+                {outgoingRequests.map(r => (
+                  <div
+                    key={r.id}
+                    className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img src={r.avatar} alt={r.username} className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 object-cover opacity-80" />
+                      <div>
+                        <p className="text-sm font-bold text-slate-300">{r.username}</p>
+                        <p className="text-xs text-amber-400/80 flex items-center gap-1">
+                          <Flame className="w-3 h-3" /> {r.rating} ELO
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 text-xs font-bold flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>PENDING SPECIFIED FRIEND'S RESPONSE</span>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         )}

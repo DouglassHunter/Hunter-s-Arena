@@ -560,7 +560,7 @@ export const ProfilePage: React.FC = () => {
                 />
                 <div className="space-y-1">
                   <span className="text-slate-300 font-bold text-xs">Avatar Preview</span>
-                  <p className="text-[11px] text-slate-500">Select a preset below or generate a seed!</p>
+                  <p className="text-[11px] text-slate-500">Select a preset avatar below!</p>
                 </div>
               </div>
 
@@ -585,32 +585,6 @@ export const ProfilePage: React.FC = () => {
                       <img src={preset} alt={`Preset ${idx + 1}`} className="w-10 h-10 rounded-lg object-cover" />
                     </button>
                   ))}
-                </div>
-              </div>
-
-              {/* Custom DiceBear Seed Input */}
-              <div className="space-y-1.5">
-                <span className="text-slate-400 text-[11px] uppercase font-semibold">Generate Avatar by Seed</span>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customAvatarSeed}
-                    onChange={e => setCustomAvatarSeed(e.target.value)}
-                    placeholder="e.g. CyberKnight, PhantomX, Dragon"
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!customAvatarSeed.trim()) return;
-                      playClick();
-                      const genUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(customAvatarSeed.trim())}`;
-                      setEditAvatar(genUrl);
-                    }}
-                    className="px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold rounded-xl"
-                  >
-                    Generate
-                  </button>
                 </div>
               </div>
             </div>

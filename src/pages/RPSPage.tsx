@@ -333,20 +333,43 @@ export const RPSPage: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
             
-            <div className="space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 flex items-center justify-center mx-auto shadow-lg shadow-cyan-500/20">
-                <Trophy className="w-8 h-8" />
-              </div>
-              <h2 className="text-3xl font-black font-mono text-cyan-400 tracking-wider">MATCH OVER</h2>
-              <p className="text-base font-mono text-white font-bold">
-                {rpsState.matchWinnerId === user?.id ? "VICTORY! YOU WON THE BEST-OF-5 DUEL!" : "OPPONENT WON THE DUEL"}
-              </p>
-              {matchFinishedData?.ratingChanges?.[user?.id || ''] && (
-                <div className="inline-block px-4 py-1.5 rounded-full bg-slate-950 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold">
-                  {matchFinishedData.ratingChanges[user?.id || ''] > 0 ? '+' : ''}{matchFinishedData.ratingChanges[user?.id || '']} Rating
+            {(() => {
+              const isHost = activeRoom.hostId === user?.id;
+              const isWinner = rpsState.matchWinnerId === user?.id;
+              const opponentName = isHost ? (activeRoom.guestUsername || 'Opponent') : activeRoom.hostUsername;
+
+              return isWinner ? (
+                <div className="space-y-3">
+                  <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 flex items-center justify-center mx-auto shadow-lg shadow-cyan-500/20">
+                    <Trophy className="w-8 h-8" />
+                  </div>
+                  <h2 className="text-3xl font-black font-mono text-cyan-400 tracking-wider">VICTORY!</h2>
+                  <p className="text-sm font-mono text-white font-bold uppercase">
+                    YOU WON THE BEST-OF-5 DUEL!
+                  </p>
+                  {matchFinishedData?.ratingChanges?.[user?.id || ''] && (
+                    <div className="inline-block px-4 py-1.5 rounded-full bg-slate-950 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold">
+                      {matchFinishedData.ratingChanges[user?.id || ''] > 0 ? '+' : ''}{matchFinishedData.ratingChanges[user?.id || '']} Rating
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto shadow-lg shadow-rose-500/20">
+                    <ShieldAlert className="w-8 h-8" />
+                  </div>
+                  <h2 className="text-3xl font-black font-mono text-rose-500 tracking-wider">DEFEAT!</h2>
+                  <p className="text-sm font-mono text-white font-bold uppercase">
+                    YOU LOST — {opponentName.toUpperCase()} WON THE DUEL!
+                  </p>
+                  {matchFinishedData?.ratingChanges?.[user?.id || ''] && (
+                    <div className="inline-block px-4 py-1.5 rounded-full bg-slate-950 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold">
+                      {matchFinishedData.ratingChanges[user?.id || ''] > 0 ? '+' : ''}{matchFinishedData.ratingChanges[user?.id || '']} Rating
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="pt-4 flex flex-col gap-3">
               <button

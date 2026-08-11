@@ -73,6 +73,7 @@ export interface TicTacToeState {
   winnerId: string | null;
   winnerSymbol: 'X' | 'O' | null;
   sideChosen?: boolean;
+  botDifficulty?: 'easy' | 'hard';
 }
 
 export type RPSChoice = 'rock' | 'paper' | 'scissors';
@@ -142,6 +143,8 @@ export interface FriendItem {
 
 export interface SocketClientEvents {
   'room:create': (data: { gameSlug: GameSlug; isPrivate: boolean }) => void;
+  'room:create_bot': (data: { gameSlug: GameSlug; difficulty?: 'easy' | 'hard' }) => void;
+  'game:set_bot_difficulty': (data: { roomCode: string; difficulty: 'easy' | 'hard' }) => void;
   'room:join': (data: { roomCode: string }) => void;
   'room:leave': () => void;
   'matchmaking:find': (data: { gameSlug: GameSlug }) => void;

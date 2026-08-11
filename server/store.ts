@@ -244,6 +244,11 @@ export function recordMatchCompletion(
 
   matchesStore.unshift(matchRecord);
 
+  // Save updated users and matches to persistent disk storage!
+  saveUser(p1);
+  saveUser(p2);
+  saveDataToDisk();
+
   return { p1Change, p2Change, matchRecord };
 }
 
@@ -307,6 +312,21 @@ export function calculateH2H(user1Id: string, user2Id: string) {
   };
 }
 
+const onlineUsersSet = new Set<string>();
+
+export function markUserOnline(userId: string) {
+  if (userId) onlineUsersSet.add(userId);
+}
+
+export function markUserOffline(userId: string) {
+  if (userId) onlineUsersSet.delete(userId);
+}
+
+export function isUserOnline(userId: string): boolean {
+  if (userId === 'usr-bot') return true;
+  return onlineUsersSet.has(userId);
+}
+
 export function getFriendsWithH2H(userId: string) {
   const userRecords = friendsStore.filter(f => f.userId === userId || f.friendId === userId);
 
@@ -316,12 +336,14 @@ export function getFriendsWithH2H(userId: string) {
     const friendUser = getUserById(friendId);
     const h2h = calculateH2H(userId, friendId);
 
+    const online = isUserOnline(friendId);
+
     return {
       id: friendId,
       username: friendUser ? friendUser.username : 'Unknown',
       avatar: friendUser ? friendUser.avatar : '',
       rating: friendUser ? friendUser.rating : 1000,
-      status: 'online' as const,
+      status: (online ? 'online' : 'offline') as 'online' | 'offline' | 'in_game',
       isPending: f.status === 'pending',
       isIncoming: f.status === 'pending' && f.initiatedBy !== userId,
       initiatedBy: f.initiatedBy,
@@ -409,7 +431,11 @@ export function acceptFriendRequest(currentUserId: string, friendId: string) {
   );
 
   if (idx !== -1) {
-    friendsStore[idx].status = 'accepted';
+    const relation = friendsStore[idx];
+    if (relation.status === 'pending' && relation.initiatedBy === currentUserId) {
+      throw new Error('Only the specified friend (recipient) can accept this request.');
+    }
+    relation.status = 'accepted';
     saveDataToDisk();
     return true;
   }
@@ -423,6 +449,10 @@ export function rejectFriendRequest(currentUserId: string, friendId: string) {
   );
 
   if (idx !== -1) {
+    const relation = friendsStore[idx];
+    if (relation.status === 'pending' && relation.initiatedBy === currentUserId) {
+      throw new Error('Only the specified friend (recipient) can deny this request.');
+    }
     friendsStore.splice(idx, 1);
     saveDataToDisk();
     return true;

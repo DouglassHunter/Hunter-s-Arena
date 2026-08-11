@@ -1,7 +1,6 @@
 import express from 'express';
 import http from 'http';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { Server as SocketIOServer } from 'socket.io';
 import { handleSignUp, handleLogin, handleGetMe, handleUpdateProfile } from './server/auth.js';
 import {
@@ -14,16 +13,14 @@ import {
   handleSendFriendRequest,
   handleAcceptFriendRequest,
   handleRejectFriendRequest
-} from './server/api.ts';
+} from './server/api.js';
 import { setupSocketIO } from './server/socket.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const PORT = Number(process.env.PORT) || 3000;
 
 async function startServer() {
   const app = express();
   const server = http.createServer(app);
-  const PORT = 3000;
 
   // Middleware
   app.use(express.json());
@@ -72,8 +69,11 @@ async function startServer() {
   }
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[NEXUS ARENA] Server listening on http://0.0.0.0:${PORT}`);
+    console.log(`[HUNTER'S ARENA] Server listening on http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('[HUNTER\'S ARENA] Failed to start server:', err);
+  process.exit(1);
+});

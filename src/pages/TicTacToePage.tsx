@@ -5,7 +5,38 @@ import { useSocket } from '../context/SocketContext.js';
 import { useSound } from '../context/SoundContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { TicTacToeState } from '../types/index.js';
-import { Trophy, Copy, Check, RefreshCw, ShieldAlert, X, HelpCircle, Shuffle, ArrowLeft } from 'lucide-react';
+import { Trophy, Copy, Check, RefreshCw, ShieldAlert, X, HelpCircle, Shuffle, ArrowLeft, Bot, Zap } from 'lucide-react';
+
+interface ColorScheme {
+  id: string;
+  name: string;
+  text: string;
+  border: string;
+  bg: string;
+  badgeBg: string;
+  badgeBorder: string;
+  glow: string;
+}
+
+const COLOR_SCHEMES: ColorScheme[] = [
+  { id: 'indigo', name: 'Indigo', text: 'text-indigo-400', border: 'border-indigo-500/40', bg: 'bg-indigo-600', badgeBg: 'bg-indigo-950/60', badgeBorder: 'border-indigo-500/80', glow: 'shadow-indigo-500/20' },
+  { id: 'cyan', name: 'Cyan', text: 'text-cyan-400', border: 'border-cyan-500/40', bg: 'bg-cyan-600', badgeBg: 'bg-cyan-950/60', badgeBorder: 'border-cyan-500/80', glow: 'shadow-cyan-500/20' },
+  { id: 'rose', name: 'Rose', text: 'text-rose-400', border: 'border-rose-500/40', bg: 'bg-rose-600', badgeBg: 'bg-rose-950/60', badgeBorder: 'border-rose-500/80', glow: 'shadow-rose-500/20' },
+  { id: 'amber', name: 'Amber', text: 'text-amber-400', border: 'border-amber-500/40', bg: 'bg-amber-600', badgeBg: 'bg-amber-950/60', badgeBorder: 'border-amber-500/80', glow: 'shadow-amber-500/20' },
+  { id: 'emerald', name: 'Emerald', text: 'text-emerald-400', border: 'border-emerald-500/40', bg: 'bg-emerald-600', badgeBg: 'bg-emerald-950/60', badgeBorder: 'border-emerald-500/80', glow: 'shadow-emerald-500/20' },
+  { id: 'fuchsia', name: 'Fuchsia', text: 'text-fuchsia-400', border: 'border-fuchsia-500/40', bg: 'bg-fuchsia-600', badgeBg: 'bg-fuchsia-950/60', badgeBorder: 'border-fuchsia-500/80', glow: 'shadow-fuchsia-500/20' },
+  { id: 'lime', name: 'Lime', text: 'text-lime-400', border: 'border-lime-500/40', bg: 'bg-lime-600', badgeBg: 'bg-lime-950/60', badgeBorder: 'border-lime-500/80', glow: 'shadow-lime-500/20' },
+  { id: 'violet', name: 'Violet', text: 'text-violet-400', border: 'border-violet-500/40', bg: 'bg-violet-600', badgeBg: 'bg-violet-950/60', badgeBorder: 'border-violet-500/80', glow: 'shadow-violet-500/20' }
+];
+
+function getRandomColorPair(): { schemeX: ColorScheme; schemeO: ColorScheme } {
+  const idxX = Math.floor(Math.random() * COLOR_SCHEMES.length);
+  let idxO = Math.floor(Math.random() * COLOR_SCHEMES.length);
+  while (idxO === idxX) {
+    idxO = Math.floor(Math.random() * COLOR_SCHEMES.length);
+  }
+  return { schemeX: COLOR_SCHEMES[idxX], schemeO: COLOR_SCHEMES[idxO] };
+}
 
 export const TicTacToePage: React.FC = () => {
   const navigate = useNavigate();
@@ -23,16 +54,19 @@ export const TicTacToePage: React.FC = () => {
     sendEmote,
     latestEmote,
     opponentDisconnected,
-    selectTicTacToeSide
+    selectTicTacToeSide,
+    setBotDifficulty
   } = useSocket();
 
   const [copiedCode, setCopiedCode] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [colorPair, setColorPair] = useState(() => getRandomColorPair());
 
   const tttState = gameState as TicTacToeState | null;
 
   useEffect(() => {
     if (tttState?.status === 'won') {
+      setColorPair(getRandomColorPair());
       const isWinner = tttState.winnerId === user?.id || (activeRoom?.hostId === user?.id && tttState.winnerId === activeRoom.hostId);
       if (isWinner) {
         playVictory();
@@ -41,6 +75,7 @@ export const TicTacToePage: React.FC = () => {
         playDefeat();
       }
     } else if (tttState?.status === 'draw') {
+      setColorPair(getRandomColorPair());
       playDraw();
     }
   }, [tttState?.status]);
@@ -151,6 +186,65 @@ export const TicTacToePage: React.FC = () => {
           </div>
         </div>
 
+        {/* AI BOT DIFFICULTY LEVEL SELECTOR BAR */}
+        {(activeRoom.guestId === 'usr-bot' || activeRoom.hostId === 'usr-bot') && (
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400">
+                <Bot className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                  <span>AI BOT DIFFICULTY</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide ${
+                    (tttState?.botDifficulty || 'easy') === 'easy'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse'
+                  }`}>
+                    {(tttState?.botDifficulty || 'easy').toUpperCase()} MODE
+                  </span>
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {(tttState?.botDifficulty || 'easy') === 'easy'
+                    ? '🟢 Easy: Suboptimal AI moves so wins are easier for you.'
+                    : '🔴 Hard: Unbeatable Minimax AI algorithm.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  playClick();
+                  setBotDifficulty('easy');
+                }}
+                className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  (tttState?.botDifficulty || 'easy') === 'easy'
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 ring-2 ring-emerald-400/50'
+                    : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                }`}
+              >
+                <span>EASY</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  playClick();
+                  setBotDifficulty('hard');
+                }}
+                className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  tttState?.botDifficulty === 'hard'
+                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20 ring-2 ring-rose-400/50'
+                    : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-300" />
+                <span>HARD</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* PRE-GAME SYMBOL / SIDE SELECTION BANNER / OVERLAY */}
         {tttState && tttState.status === 'active' && !tttState.sideChosen && (
           <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-cyan-950 border-2 border-indigo-500/50 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
@@ -167,18 +261,18 @@ export const TicTacToePage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto font-mono">
               <button
                 onClick={() => handleSelectSide('X')}
-                className="p-4 rounded-2xl bg-indigo-950/80 hover:bg-indigo-900 border-2 border-indigo-500/80 text-white font-bold flex flex-col items-center justify-center gap-2 group transition-all hover:scale-105 active:scale-95 shadow-xl shadow-indigo-950/50"
+                className={`p-4 rounded-2xl ${colorPair.schemeX.badgeBg} hover:opacity-95 border-2 ${colorPair.schemeX.badgeBorder} text-white font-bold flex flex-col items-center justify-center gap-2 group transition-all hover:scale-105 active:scale-95 shadow-xl`}
               >
-                <span className="text-4xl font-black text-indigo-400 group-hover:scale-110 transition-transform">X</span>
-                <span className="text-xs text-indigo-200">PLAY AS X (START 1ST)</span>
+                <span className={`text-4xl font-black ${colorPair.schemeX.text} group-hover:scale-110 transition-transform`}>X</span>
+                <span className="text-xs text-slate-200">PLAY AS X (START 1ST)</span>
               </button>
 
               <button
                 onClick={() => handleSelectSide('O')}
-                className="p-4 rounded-2xl bg-cyan-950/80 hover:bg-cyan-900 border-2 border-cyan-500/80 text-white font-bold flex flex-col items-center justify-center gap-2 group transition-all hover:scale-105 active:scale-95 shadow-xl shadow-cyan-950/50"
+                className={`p-4 rounded-2xl ${colorPair.schemeO.badgeBg} hover:opacity-95 border-2 ${colorPair.schemeO.badgeBorder} text-white font-bold flex flex-col items-center justify-center gap-2 group transition-all hover:scale-105 active:scale-95 shadow-xl`}
               >
-                <span className="text-4xl font-black text-cyan-400 group-hover:scale-110 transition-transform">O</span>
-                <span className="text-xs text-cyan-200">PLAY AS O (START 2ND)</span>
+                <span className={`text-4xl font-black ${colorPair.schemeO.text} group-hover:scale-110 transition-transform`}>O</span>
+                <span className="text-xs text-slate-200">PLAY AS O (START 2ND)</span>
               </button>
 
               <button
@@ -205,7 +299,7 @@ export const TicTacToePage: React.FC = () => {
           <div className="grid grid-cols-3 items-center text-center">
             
             {/* Player 1 (X) */}
-            <div className={`p-4 rounded-2xl transition-all relative ${tttState?.currentTurn === 'X' && tttState?.status === 'active' ? 'bg-indigo-950/60 border border-indigo-500/40 shadow-lg shadow-indigo-500/10' : ''}`}>
+            <div className={`p-4 rounded-2xl transition-all relative ${tttState?.currentTurn === 'X' && tttState?.status === 'active' ? `${colorPair.schemeX.badgeBg} border ${colorPair.schemeX.border} shadow-lg ${colorPair.schemeX.glow}` : ''}`}>
               {latestEmote && latestEmote.username === playerX.username && (
                 <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900 border-2 border-indigo-500 text-2xl px-3 py-1 rounded-2xl shadow-2xl animate-bounce z-20 flex items-center gap-1 font-mono">
                   <span>{latestEmote.emote}</span>
@@ -215,9 +309,9 @@ export const TicTacToePage: React.FC = () => {
                 <img
                   src={playerX.avatar}
                   alt={playerX.username}
-                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-800 border-2 border-indigo-500/80 mx-auto object-cover shadow-md"
+                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-800 border-2 ${colorPair.schemeX.badgeBorder} mx-auto object-cover shadow-md`}
                 />
-                <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-xl bg-indigo-600 border border-indigo-400 text-white font-mono font-black text-xs flex items-center justify-center shadow-md">
+                <span className={`absolute -bottom-2 -right-2 w-7 h-7 rounded-xl ${colorPair.schemeX.bg} border border-slate-900 text-white font-mono font-black text-xs flex items-center justify-center shadow-md`}>
                   X
                 </span>
               </div>
@@ -243,7 +337,7 @@ export const TicTacToePage: React.FC = () => {
             </div>
 
             {/* Player 2 (O) */}
-            <div className={`p-4 rounded-2xl transition-all relative ${tttState?.currentTurn === 'O' && tttState?.status === 'active' ? 'bg-cyan-950/60 border border-cyan-500/40 shadow-lg shadow-cyan-500/10' : ''}`}>
+            <div className={`p-4 rounded-2xl transition-all relative ${tttState?.currentTurn === 'O' && tttState?.status === 'active' ? `${colorPair.schemeO.badgeBg} border ${colorPair.schemeO.border} shadow-lg ${colorPair.schemeO.glow}` : ''}`}>
               {playerO ? (
                 <>
                   {latestEmote && latestEmote.username === playerO.username && (
@@ -255,9 +349,9 @@ export const TicTacToePage: React.FC = () => {
                     <img
                       src={playerO.avatar}
                       alt={playerO.username}
-                      className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-800 border-2 border-cyan-500/80 mx-auto object-cover shadow-md"
+                      className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-800 border-2 ${colorPair.schemeO.badgeBorder} mx-auto object-cover shadow-md`}
                     />
-                    <span className="absolute -bottom-2 -right-2 w-7 h-7 rounded-xl bg-cyan-600 border border-cyan-400 text-white font-mono font-black text-xs flex items-center justify-center shadow-md">
+                    <span className={`absolute -bottom-2 -right-2 w-7 h-7 rounded-xl ${colorPair.schemeO.bg} border border-slate-900 text-white font-mono font-black text-xs flex items-center justify-center shadow-md`}>
                       O
                     </span>
                   </div>
@@ -289,9 +383,9 @@ export const TicTacToePage: React.FC = () => {
                     isWinningCell
                       ? 'bg-gradient-to-br from-emerald-600 to-teal-500 text-white shadow-xl shadow-emerald-500/30 scale-105'
                       : cell === 'X'
-                      ? 'bg-slate-950 text-indigo-400 border border-indigo-500/30 shadow-inner'
+                      ? `bg-slate-950 ${colorPair.schemeX.text} border ${colorPair.schemeX.border} shadow-inner`
                       : cell === 'O'
-                      ? 'bg-slate-950 text-cyan-400 border border-cyan-500/30 shadow-inner'
+                      ? `bg-slate-950 ${colorPair.schemeO.text} border ${colorPair.schemeO.border} shadow-inner`
                       : myTurn && tttState?.status === 'active'
                       ? 'bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 cursor-pointer'
                       : 'bg-slate-950/60 border border-slate-900 cursor-not-allowed'
@@ -342,22 +436,44 @@ export const TicTacToePage: React.FC = () => {
             </button>
             
             {tttState.status === 'won' ? (
-              <div className="space-y-3">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
-                  <Trophy className="w-8 h-8" />
-                </div>
-                <h2 className="text-3xl font-black font-mono text-emerald-400 tracking-wider">VICTORY!</h2>
-                <p className="text-sm font-mono text-slate-200 font-bold">
-                  {tttState.winnerId === user?.id || (isHost && tttState.winnerId === activeRoom.hostId)
-                    ? "YOU WON THE MATCH!"
-                    : `${(tttState.winnerSymbol && tttState.players?.[tttState.winnerSymbol]?.username || "OPPONENT").toUpperCase()} WON THE MATCH`}
-                </p>
-                {matchFinishedData?.ratingChanges?.[user?.id || ''] && (
-                  <div className="inline-block px-4 py-1.5 rounded-full bg-slate-950 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold">
-                    {matchFinishedData.ratingChanges[user?.id || ''] > 0 ? '+' : ''}{matchFinishedData.ratingChanges[user?.id || '']} Rating
+              (() => {
+                const isWinner = tttState.winnerId === user?.id || (isHost && tttState.winnerId === activeRoom.hostId);
+                const winnerName = tttState.winnerSymbol && tttState.players?.[tttState.winnerSymbol]?.username
+                  ? tttState.players[tttState.winnerSymbol].username
+                  : (isHost ? (activeRoom.guestUsername || 'Opponent') : activeRoom.hostUsername);
+
+                return isWinner ? (
+                  <div className="space-y-3">
+                    <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+                      <Trophy className="w-8 h-8" />
+                    </div>
+                    <h2 className="text-3xl font-black font-mono text-emerald-400 tracking-wider">VICTORY!</h2>
+                    <p className="text-sm font-mono text-slate-200 font-bold uppercase">
+                      YOU WON THE MATCH!
+                    </p>
+                    {matchFinishedData?.ratingChanges?.[user?.id || ''] && (
+                      <div className="inline-block px-4 py-1.5 rounded-full bg-slate-950 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold">
+                        {matchFinishedData.ratingChanges[user?.id || ''] > 0 ? '+' : ''}{matchFinishedData.ratingChanges[user?.id || '']} Rating
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto shadow-lg shadow-rose-500/20">
+                      <ShieldAlert className="w-8 h-8" />
+                    </div>
+                    <h2 className="text-3xl font-black font-mono text-rose-500 tracking-wider">DEFEAT!</h2>
+                    <p className="text-sm font-mono text-slate-200 font-bold uppercase">
+                      YOU LOST — {winnerName.toUpperCase()} WON THE MATCH!
+                    </p>
+                    {matchFinishedData?.ratingChanges?.[user?.id || ''] && (
+                      <div className="inline-block px-4 py-1.5 rounded-full bg-slate-950 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold">
+                        {matchFinishedData.ratingChanges[user?.id || ''] > 0 ? '+' : ''}{matchFinishedData.ratingChanges[user?.id || '']} Rating
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <div className="space-y-3">
                 <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">

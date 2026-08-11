@@ -96,8 +96,13 @@ export function handleAcceptFriendRequest(req: Request, res: Response) {
 
   if (!friendId) return res.status(400).json({ error: 'Friend ID required' });
 
-  const success = acceptFriendRequest(currentUserId, friendId);
-  return res.json({ success });
+  try {
+    const success = acceptFriendRequest(currentUserId, friendId);
+    if (!success) return res.status(400).json({ error: 'Request not found' });
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'Failed to accept friend request' });
+  }
 }
 
 export function handleRejectFriendRequest(req: Request, res: Response) {
@@ -109,8 +114,13 @@ export function handleRejectFriendRequest(req: Request, res: Response) {
 
   if (!friendId) return res.status(400).json({ error: 'Friend ID required' });
 
-  const success = rejectFriendRequest(currentUserId, friendId);
-  return res.json({ success });
+  try {
+    const success = rejectFriendRequest(currentUserId, friendId);
+    if (!success) return res.status(400).json({ error: 'Request not found' });
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'Failed to deny friend request' });
+  }
 }
 
 export function handleGetPublicRooms(req: Request, res: Response) {
