@@ -1,0 +1,6 @@
+{
+  "name": "Hunter's 1v1 Arena",
+  "description": "Scalable real-time multiplayer gaming platform featuring Tic-Tac-Toe, Rock-Paper-Scissors, AI Bot modes, ELO ratings, global leaderboards, and player stats.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

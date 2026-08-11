@@ -1,0 +1,40 @@
+{
+  "users": [
+    {
+      "id": "usr-bot",
+      "username": "Hunter's Bot 🤖",
+      "email": "bot@huntersarena.com",
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=HuntersBot",
+      "bio": "AI Practice Bot for Hunter's Arena. Always ready for a match!",
+      "rating": 1200,
+      "totalGames": 0,
+      "wins": 0,
+      "losses": 0,
+      "draws": 0,
+      "winStreak": 0,
+      "bestStreak": 0,
+      "joinedAt": "2026-08-11",
+      "soundEnabled": false,
+      "gameStats": {
+        "tic-tac-toe": {
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "totalGames": 0,
+          "winStreak": 0,
+          "bestStreak": 0
+        },
+        "rock-paper-scissors": {
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "totalGames": 0,
+          "winStreak": 0,
+          "bestStreak": 0
+        }
+      }
+    }
+  ],
+  "friends": [],
+  "matches": []
+}
